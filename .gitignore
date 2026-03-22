@@ -1,5 +1,6 @@
 # compiled output
-/node_modules
+node_modules/
+**/node_modules/
 /build
 **/dist
 
@@ -35,6 +36,9 @@ lerna-debug.log*
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# IDE - Cursor
+.cursor
+
 # dotenv environment variable files
 .env
 .env.development.local
@@ -56,3 +60,4 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 **/generated/prisma
+**/generated
