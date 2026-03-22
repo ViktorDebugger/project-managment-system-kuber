@@ -1,0 +1,49 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ParticipantRole {
+  Admin
+  Member
+}
+
+model Workspace {
+  id           String        @id @default(uuid())
+  name         String
+  description  String?
+  tags         Tag[]
+  participants Participant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("workspaces")
+}
+
+model Participant {
+  id          String          @id @default(uuid())
+  userId      String
+  workspaceId String
+  role        ParticipantRole @default(Member)
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@map("participants")
+}
+
+model Tag {
+  id          String    @id @default(uuid())
+  name        String
+  color       String?
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([name, workspaceId])
+  @@map("tags")
+}

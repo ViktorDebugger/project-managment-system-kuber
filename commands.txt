@@ -1,0 +1,121 @@
+cp .env.example .env
+docker-compose up --build
+
+
+---------------------------------
+
+docker-compose up -d user_db workspace_db project_task_db
+
+# user-auth
+cd services/user-auth
+cp .env.example .env
+npx prisma migrate dev
+npx prisma generate
+npm run start:dev
+
+http://localhost:3001/api
+
+# workspace
+cd services/workspace
+cp .env.example .env
+npx prisma migrate dev
+npx prisma generate
+npm run start:dev
+
+http://localhost:3002/api
+
+# project-task
+cd services/project-task
+cp .env.example .env
+npx prisma migrate dev
+npx prisma generate
+npm run start:dev
+
+http://localhost:3003/api
+
+# api-gateway
+cd services/api-gateway
+cp .env.example .env
+npm run start:dev
+
+---------------------------------
+
+cd services/user-auth
+npx prisma studio
+
+cd services/workspace
+npx prisma studio
+
+cd services/project-task
+npx prisma studio
+
+npm run build -w packages/shared
+
+
+npm run test
+npm run test:e2e
+
+
+docker system prune -a --volumes
+
+------------ kuber -----------------------
+
+minikube start
+minikube status
+
+minikube docker-env | Invoke-Expression
+docker ps
+
+
+.\scripts\k8s-build.ps1
+
+.\scripts\k8s-deploy.ps1
+
+------------ Перевірка -----------------
+
+kubectl port-forward -n project-management svc/api-gateway 3000:3000
+
+$BASE_URL = "http://$(minikube ip):30000"
+
+Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -ContentType "application/json" -Body '{}'
+
+Invoke-RestMethod -Uri "$BASE_URL/auth/register" -Method Post -ContentType "application/json" -Body '{"username":"testuser","email":"test@example.com","fullname":"Test User","password":"password123"}'
+
+$login = Invoke-RestMethod -Uri "$BASE_URL/auth/login" -Method Post -ContentType "application/json" -Body '{"email":"test@example.com","password":"password123"}'
+$TOKEN = $login.access_token
+
+Invoke-RestMethod -Uri "$BASE_URL/workspaces" -Method Post -ContentType "application/json" -Headers @{Authorization="Bearer $TOKEN"} -Body '{"name":"Test WS"}'
+
+
+----------- Redis ------------------------
+
+kubectl exec -n project-management deployment/redis -- redis-cli ping
+
+------------------ Масштабування ------------------------------
+
+kubectl scale deployment api-gateway --replicas=4 -n project-management
+kubectl get pods -n project-management -l app=api-gateway
+
+---------------- Pod-a ---------------------------
+
+kubectl get pods -n project-management -l app=api-gateway
+kubectl delete pod <pod-name> -n project-management
+
+# Перевірка до/після
+try {
+  Invoke-WebRequest -Uri "$BASE_URL/auth/login" -Method Post -ContentType "application/json" -Body '{}' -UseBasicParsing | Select-Object -ExpandProperty StatusCode
+} catch {
+  $_.Exception.Response.StatusCode.value__
+}
+-------------------- Rolling update ---------------------------
+
+minikube docker-env | Invoke-Expression
+docker build -t project-managment/user-auth:v2 -f services/user-auth/Dockerfile .
+
+kubectl set image deployment/user-auth user-auth=project-managment/user-auth:v2 -n project-management
+kubectl rollout status deployment/user-auth -n project-management
+
+------------------------------ Відкат ------------------
+
+kubectl rollout undo deployment/user-auth -n project-management
+

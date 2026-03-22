@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-task
+  namespace: project-management
+  labels:
+    app: project-task
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: project-task
+  template:
+    metadata:
+      labels:
+        app: project-task
+    spec:
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "until nc -z project-task-db 5432; do echo waiting for project-task-db; sleep 2; done"
+        - name: wait-for-user-auth
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "until nc -z user-auth 3001; do echo waiting for user-auth; sleep 2; done"
+        - name: wait-for-workspace
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - "until nc -z workspace 3002; do echo waiting for workspace; sleep 2; done"
+      containers:
+        - name: project-task
+          image: project-managment/project-task:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3003
+          envFrom:
+            - configMapRef:
+                name: project-management-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: project-management-secrets
+                  key: PROJECT_TASK_DATABASE_URL
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: project-management-secrets
+                  key: JWT_SECRET
+            - name: PORT
+              value: "3003"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: project-task
+  namespace: project-management
+  labels:
+    app: project-task
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3003
+      targetPort: 3003
+      protocol: TCP
+      name: http
+  selector:
+    app: project-task

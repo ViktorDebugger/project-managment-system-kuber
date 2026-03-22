@@ -1,0 +1,35 @@
+{
+  "name": "project-management-monorepo",
+  "version": "0.0.1",
+  "private": true,
+  "license": "UNLICENSED",
+  "workspaces": [
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "build:user-auth": "npm run build -w services/user-auth",
+    "build:workspace": "npm run build -w services/workspace",
+    "build:project-task": "npm run build -w services/project-task",
+    "build:api-gateway": "npm run build -w services/api-gateway",
+    "start:user-auth": "npm run start -w services/user-auth",
+    "start:workspace": "npm run start -w services/workspace",
+    "start:project-task": "npm run start -w services/project-task",
+    "start:api-gateway": "npm run start -w services/api-gateway",
+    "test": "npm run test -w services/user-auth && npm run test -w services/workspace && npm run test -w services/project-task",
+    "test:user-auth": "npm run test -w services/user-auth",
+    "test:workspace": "npm run test -w services/workspace",
+    "test:project-task": "npm run test -w services/project-task",
+    "test:e2e": "jest -c e2e/jest-e2e.config.js",
+    "test:e2e:docker": "docker-compose up -d --wait && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.3"
+  }
+}

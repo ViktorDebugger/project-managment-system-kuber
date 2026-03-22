@@ -1,0 +1,144 @@
+services:
+  user_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: user_auth_db
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d user_auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  workspace_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: workspace_db
+    volumes:
+      - workspace_db_data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d workspace_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  project_task_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: project_task_db
+    volumes:
+      - project_task_db_data:/var/lib/postgresql/data
+    ports:
+      - "5437:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d project_task_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  user-auth:
+    build:
+      context: .
+      dockerfile: services/user-auth/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://user:password@user_db:5432/user_auth_db
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      PORT: 3001
+    depends_on:
+      user_db:
+        condition: service_healthy
+
+  workspace:
+    build:
+      context: .
+      dockerfile: services/workspace/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      DATABASE_URL: postgresql://user:password@workspace_db:5432/workspace_db
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      USER_SERVICE_URL: http://user-auth:3001
+      REDIS_URL: redis://redis:6379
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-300}
+      PORT: 3002
+    depends_on:
+      workspace_db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-auth:
+        condition: service_started
+
+  project-task:
+    build:
+      context: .
+      dockerfile: services/project-task/Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      DATABASE_URL: postgresql://user:password@project_task_db:5432/project_task_db
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      USER_SERVICE_URL: http://user-auth:3001
+      WORKSPACE_SERVICE_URL: http://workspace:3002
+      PORT: 3003
+    depends_on:
+      project_task_db:
+        condition: service_healthy
+      user-auth:
+        condition: service_started
+      workspace:
+        condition: service_started
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/auth/login',r=>{r.resume();process.exit(r.statusCode?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret}
+      USER_SERVICE_URL: http://user-auth:3001
+      WORKSPACE_SERVICE_URL: http://workspace:3002
+      PROJECT_TASK_SERVICE_URL: http://project-task:3003
+      PORT: 3000
+    depends_on:
+      - user-auth
+      - workspace
+      - project-task
+
+volumes:
+  user_db_data:
+  workspace_db_data:
+  project_task_db_data:
+  redis_data:
