@@ -10,6 +10,7 @@
 - [Технологічний стек](#технологічний-стек)
 - [Структура монорепо](#структура-монорепо)
 - [Швидкий запуск (Docker Compose)](#швидкий-запуск-docker-compose)
+- [Kubernetes (Minikube)](#kubernetes-minikube)
 - [Запуск сервісів окремо (локально)](#запуск-сервісів-окремо-локально)
 - [Конфігурація](#конфігурація)
 - [Кешування (Redis)](#кешування-redis)
@@ -84,6 +85,9 @@ project-managment/
 │   ├── workspace/              # :3002 — Workspaces, Participants, Tags
 │   ├── project-task/           # :3003 — Projects, Sprints, Tasks, Comments, Logs
 │   └── api-gateway/            # :3000 — Reverse proxy (single entry point)
+├── k8s/                        # Kubernetes manifests (Deployments, Services, ConfigMaps, Secrets)
+├── scripts/                    # k8s-build.ps1, k8s-deploy.ps1, k8s-build.sh, k8s-deploy.sh
+├── e2e/                        # E2E-тести міжсервісної взаємодії
 ├── docker-compose.yml
 ├── .env.example
 └── package.json                # npm workspaces
@@ -108,8 +112,10 @@ project-managment/
 2. Запуск усіх сервісів:
 
    ```bash
-   docker-compose up --build
+   docker-compose up -d --build
    ```
+
+   Без `-d` — логи в консолі. З `-d` — запуск у фоні.
 
    - API Gateway: `http://localhost:3000`
    - user-auth: `http://localhost:3001`
@@ -117,6 +123,33 @@ project-managment/
    - project-task: `http://localhost:3003`
 
    Prisma-міграції виконуються автоматично при старті контейнерів.
+
+---
+
+## Kubernetes (Minikube)
+
+Для запуску в Minikube потрібні: **Docker Desktop**, **Minikube**, **kubectl**.
+
+### Перший запуск
+
+```powershell
+minikube start
+minikube docker-env | Invoke-Expression
+.\scripts\k8s-build.ps1
+.\scripts\k8s-deploy.ps1
+kubectl port-forward -n project-management svc/api-gateway 3000:3000
+```
+
+API доступний за `http://localhost:3000`. `port-forward` має залишатися запущеним в окремому терміналі.
+
+### Після перезапуску ПК
+
+```powershell
+minikube start
+kubectl port-forward -n project-management svc/api-gateway 3000:3000
+```
+
+Повний перелік команд, масштабування, rolling update — **[LAB_INSTRUCTIONS.md](./LAB_INSTRUCTIONS.md)**.
 
 ---
 
@@ -179,7 +212,7 @@ npm run test:e2e:docker
 
 **Перевірка роботи кешу**
 
-1. Запустіть систему: `docker-compose up --build`
+1. Запустіть систему: `docker-compose up -d --build`
 2. Отримайте JWT: `POST /auth/login` з `email` та `password`
 3. Створіть workspace: `POST /workspaces` з `{"name":"Test WS","description":"..."}`
 4. **Перший виклик** (без кешу): `GET /workspaces/:workspaceId` з заголовком `Authorization: Bearer <token>` — відповідь береться з БД, час відповіді більший
@@ -339,7 +372,6 @@ Authorization: Bearer <JWT>
 | `npm run format` | Prettier для `src` та `test` |
 | `npm run test` | Юніт-тести (Jest) |
 | `npm run test:e2e` | E2E-тести |
-| `npm run test:cov` | Покриття коду тестами |
 
 Prisma (виконувати вручну за потреби):
 
