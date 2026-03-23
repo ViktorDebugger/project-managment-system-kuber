@@ -19,7 +19,7 @@ describe('TasksService', () => {
     updateWithTransaction: jest.Mock;
     delete: jest.Mock;
   };
-  let userClientService: { validateUserIds: jest.Mock };
+  let userClientService: { validateUserIds: jest.Mock; getUsersByIds: jest.Mock };
   let workspaceClientService: {
     ensureWorkspaceExists: jest.Mock;
     resolveOrCreateTags: jest.Mock;
@@ -50,7 +50,10 @@ describe('TasksService', () => {
       updateWithTransaction: jest.fn(),
       delete: jest.fn(),
     };
-    userClientService = { validateUserIds: jest.fn().mockResolvedValue(true) };
+    userClientService = {
+      validateUserIds: jest.fn().mockResolvedValue(true),
+      getUsersByIds: jest.fn().mockResolvedValue([]),
+    };
     workspaceClientService = {
       ensureWorkspaceExists: jest.fn(),
       resolveOrCreateTags: jest.fn().mockResolvedValue([]),
@@ -69,7 +72,7 @@ describe('TasksService', () => {
   });
 
   describe('findAllByProjectId', () => {
-    it('should return paginated tasks', async () => {
+    it('should return paginated tasks with assignee info', async () => {
       taskRepository.findProjectByWorkspaceAndId.mockResolvedValue({ id: 'proj-1' });
       taskRepository.findManyByProjectIdPaginated.mockResolvedValue([mockTask]);
       taskRepository.countByProjectId.mockResolvedValue(1);
@@ -79,7 +82,8 @@ describe('TasksService', () => {
         limit: 10,
       });
 
-      expect(result.data).toEqual([mockTask]);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({ ...mockTask, assigneeIds: [], assignees: [] });
       expect(result.meta.total).toBe(1);
     });
 
@@ -93,13 +97,13 @@ describe('TasksService', () => {
   });
 
   describe('findOne', () => {
-    it('should return task when found', async () => {
+    it('should return task with assignee info when found', async () => {
       taskRepository.findFirstByIdAndProjectId.mockResolvedValue(mockTask);
       taskRepository.findProjectByWorkspaceAndId.mockResolvedValue({ id: 'proj-1' });
 
       const result = await service.findOne('ws-1', 'proj-1', 'task-1');
 
-      expect(result).toBe(mockTask);
+      expect(result).toMatchObject({ ...mockTask, assigneeIds: [], assignees: [] });
     });
 
     it('should throw NotFoundException when task not found', async () => {
@@ -120,7 +124,7 @@ describe('TasksService', () => {
         title: 'New Task',
       });
 
-      expect(result).toBe(mockTask);
+      expect(result).toMatchObject({ ...mockTask, assigneeIds: [], assignees: [] });
       expect(taskRepository.createWithTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           projectId: 'proj-1',
@@ -179,7 +183,7 @@ describe('TasksService', () => {
         title: 'Updated',
       });
 
-      expect(result.title).toBe('Updated');
+      expect(result).toMatchObject({ title: 'Updated', assignees: [] });
     });
 
     it('should throw BadRequestException when assignees invalid', async () => {

@@ -30,6 +30,14 @@ export class UserRepository {
     });
   }
 
+  findManyByIds(ids: string[]): Promise<Pick<User, 'id' | 'username' | 'email' | 'fullname'>[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, username: true, email: true, fullname: true },
+    });
+  }
+
   create(data: Prisma.UserUncheckedCreateInput): Promise<User> {
     return this.prisma.user.create({
       data,

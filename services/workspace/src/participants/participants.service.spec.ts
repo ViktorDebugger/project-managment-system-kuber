@@ -19,8 +19,9 @@ describe('ParticipantsService', () => {
     update: jest.Mock;
     delete: jest.Mock;
   };
-  let userClientService: { validateUserIds: jest.Mock };
+  let userClientService: { validateUserIds: jest.Mock; getUserByEmail: jest.Mock; getUsersByIds: jest.Mock };
 
+  const mockUser = { id: 'user-1', username: 'u1', email: 'u1@test.com', fullname: 'User One' };
   const mockParticipant = {
     id: 'p-1',
     userId: 'user-1',
@@ -41,7 +42,11 @@ describe('ParticipantsService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     };
-    userClientService = { validateUserIds: jest.fn().mockResolvedValue(true) };
+    userClientService = {
+      validateUserIds: jest.fn().mockResolvedValue(true),
+      getUserByEmail: jest.fn(),
+      getUsersByIds: jest.fn().mockResolvedValue([mockUser]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -55,14 +60,15 @@ describe('ParticipantsService', () => {
   });
 
   describe('findAllByWorkspaceId', () => {
-    it('should return paginated participants', async () => {
+    it('should return paginated participants with user info', async () => {
       participantRepository.findWorkspaceById.mockResolvedValue({ id: 'ws-1' });
       participantRepository.findManyByWorkspaceIdPaginated.mockResolvedValue([mockParticipant]);
       participantRepository.countByWorkspaceId.mockResolvedValue(1);
 
       const result = await service.findAllByWorkspaceId('ws-1', { page: 1, limit: 10 });
 
-      expect(result.data).toEqual([mockParticipant]);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({ ...mockParticipant, user: mockUser });
       expect(result.meta.total).toBe(1);
     });
 
@@ -76,12 +82,12 @@ describe('ParticipantsService', () => {
   });
 
   describe('findOne', () => {
-    it('should return participant when found', async () => {
+    it('should return participant with user info when found', async () => {
       participantRepository.findFirstByIdAndWorkspaceId.mockResolvedValue(mockParticipant);
 
       const result = await service.findOne('ws-1', 'p-1');
 
-      expect(result).toBe(mockParticipant);
+      expect(result).toMatchObject({ ...mockParticipant, user: mockUser });
     });
 
     it('should throw NotFoundException when not found', async () => {
@@ -105,8 +111,28 @@ describe('ParticipantsService', () => {
         role: 'Member',
       });
 
-      expect(result).toBe(mockParticipant);
+      expect(result).toMatchObject({ ...mockParticipant, user: mockUser });
       expect(userClientService.validateUserIds).toHaveBeenCalledWith(['user-1']);
+      expect(participantRepository.create).toHaveBeenCalledWith({
+        workspaceId: 'ws-1',
+        userId: 'user-1',
+        role: 'Member',
+      });
+    });
+
+    it('should create participant by email', async () => {
+      participantRepository.findWorkspaceById.mockResolvedValue({ id: 'ws-1' });
+      userClientService.getUserByEmail.mockResolvedValue(mockUser);
+      participantRepository.findUniqueByUserIdAndWorkspaceId.mockResolvedValue(null);
+      participantRepository.create.mockResolvedValue(mockParticipant);
+
+      const result = await service.create('ws-1', {
+        email: 'u1@test.com',
+        role: 'Member',
+      });
+
+      expect(result).toMatchObject({ ...mockParticipant, user: mockUser });
+      expect(userClientService.getUserByEmail).toHaveBeenCalledWith('u1@test.com');
       expect(participantRepository.create).toHaveBeenCalledWith({
         workspaceId: 'ws-1',
         userId: 'user-1',
@@ -143,7 +169,7 @@ describe('ParticipantsService', () => {
 
       const result = await service.update('ws-1', 'p-1', { role: 'Admin' });
 
-      expect(result.role).toBe('Admin');
+      expect(result).toMatchObject({ role: 'Admin' });
       expect(participantRepository.update).toHaveBeenCalledWith(
         'p-1',
         expect.objectContaining({ role: 'Admin' }),

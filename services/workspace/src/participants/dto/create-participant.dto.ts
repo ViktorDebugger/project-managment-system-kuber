@@ -1,11 +1,17 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsUUID } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEmail, IsEnum, IsOptional, IsUUID, ValidateIf } from 'class-validator';
 import { ParticipantRole } from 'generated/prisma/client';
 
 export class CreateParticipantDto {
-  @ApiProperty({ description: 'User ID to add to workspace' })
+  @ApiPropertyOptional({ description: 'User ID to add to workspace' })
+  @ValidateIf((o) => !o.email)
   @IsUUID('4')
-  userId: string;
+  userId?: string;
+
+  @ApiPropertyOptional({ description: 'User email to add to workspace (alternative to userId)' })
+  @ValidateIf((o) => !o.userId)
+  @IsEmail()
+  email?: string;
 
   @ApiProperty({ enum: ParticipantRole, default: ParticipantRole.Member })
   @IsEnum(ParticipantRole)

@@ -19,4 +19,32 @@ export class UserClientService {
     );
     return response.data.valid;
   }
+
+  async getUsersByIds(
+    ids: string[],
+  ): Promise<{ id: string; username: string; email: string; fullname: string }[]> {
+    if (ids.length === 0) return [];
+    const baseUrl = this.config.getOrThrow<string>('USER_SERVICE_URL');
+    const url = `${baseUrl}/users/by-ids?ids=${ids.join(',')}`;
+    const response = await firstValueFrom(
+      this.httpService.get<{ id: string; username: string; email: string; fullname: string }[]>(
+        url,
+      ),
+    );
+    return response.data;
+  }
+
+  async getUserByEmail(
+    email: string,
+  ): Promise<{ id: string; username: string; email: string; fullname: string } | null> {
+    if (!email?.trim()) return null;
+    const baseUrl = this.config.getOrThrow<string>('USER_SERVICE_URL');
+    const url = `${baseUrl}/users/by-email?email=${encodeURIComponent(email.trim())}`;
+    const response = await firstValueFrom(
+      this.httpService.get<{ id: string; username: string; email: string; fullname: string } | null>(
+        url,
+      ),
+    );
+    return response.data;
+  }
 }

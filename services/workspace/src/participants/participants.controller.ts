@@ -17,10 +17,12 @@ import {
   type PaginationMeta,
   PaginationDto,
 } from '@project-management/shared';
-import type { Participant } from 'generated/prisma/client';
 import { CreateParticipantDto } from './dto/create-participant.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
-import { ParticipantsService } from './participants.service';
+import {
+  type ParticipantWithUser,
+  ParticipantsService,
+} from './participants.service';
 
 @ApiBearerAuth()
 @Controller('workspaces/:workspaceId/participants')
@@ -40,7 +42,7 @@ export class ParticipantsController {
   findAll(
     @Param('workspaceId') workspaceId: string,
     @Query() pagination: PaginationDto,
-  ): Promise<{ data: Participant[]; meta: PaginationMeta }> {
+  ): Promise<{ data: ParticipantWithUser[]; meta: PaginationMeta }> {
     return this.participantsService.findAllByWorkspaceId(
       workspaceId,
       pagination,
@@ -52,7 +54,7 @@ export class ParticipantsController {
   findOne(
     @Param('workspaceId') workspaceId: string,
     @Param('participantId') participantId: string,
-  ): Promise<Participant> {
+  ): Promise<ParticipantWithUser> {
     return this.participantsService.findOne(workspaceId, participantId);
   }
 
@@ -62,7 +64,7 @@ export class ParticipantsController {
   create(
     @Param('workspaceId') workspaceId: string,
     @Body() dto: CreateParticipantDto,
-  ): Promise<Participant> {
+  ): Promise<ParticipantWithUser> {
     return this.participantsService.create(workspaceId, dto);
   }
 
@@ -73,7 +75,7 @@ export class ParticipantsController {
     @Param('workspaceId') workspaceId: string,
     @Param('participantId') participantId: string,
     @Body() dto: Partial<UpdateParticipantDto>,
-  ): Promise<Participant> {
+  ): Promise<ParticipantWithUser> {
     return this.participantsService.update(workspaceId, participantId, dto);
   }
 

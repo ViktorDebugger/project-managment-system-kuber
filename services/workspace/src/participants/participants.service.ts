@@ -13,6 +13,10 @@ import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { UserClientService } from '../users/user-client.service';
 import { ParticipantRepository } from './repositories/participant.repository';
 
+export type ParticipantWithUser = Participant & {
+  user: { id: string; username: string; email: string; fullname: string };
+};
+
 const PARTICIPANT_SORT_FIELDS = ['id', 'userId', 'role'] as const;
 
 @Injectable()
@@ -25,7 +29,7 @@ export class ParticipantsService {
   async findAllByWorkspaceId(
     workspaceId: string,
     pagination: PaginationDto,
-  ): Promise<{ data: Participant[]; meta: PaginationMeta }> {
+  ): Promise<{ data: ParticipantWithUser[]; meta: PaginationMeta }> {
     await this.ensureWorkspaceExists(workspaceId);
     const page = Number(pagination.page) || 1;
     const limit = Number(pagination.limit) || 10;
@@ -38,7 +42,7 @@ export class ParticipantsService {
     const skip = (page - 1) * limit;
     const take = limit;
     const orderBy = { [sortBy]: order };
-    const [data, total] = await Promise.all([
+    const [participants, total] = await Promise.all([
       this.participantRepository.findManyByWorkspaceIdPaginated(workspaceId, {
         skip,
         take,
@@ -46,6 +50,18 @@ export class ParticipantsService {
       }),
       this.participantRepository.countByWorkspaceId(workspaceId),
     ]);
+    const userIds = [...new Set(participants.map((p) => p.userId))];
+    const users = await this.userClientService.getUsersByIds(userIds);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    const data: ParticipantWithUser[] = participants.map((p) => ({
+      ...p,
+      user: userMap.get(p.userId) ?? {
+        id: p.userId,
+        username: '',
+        email: '',
+        fullname: '',
+      },
+    }));
     return {
       data,
       meta: {
@@ -60,27 +76,46 @@ export class ParticipantsService {
   async findOne(
     workspaceId: string,
     participantId: string,
-  ): Promise<Participant> {
+  ): Promise<ParticipantWithUser> {
     const participant =
       await this.participantRepository.findFirstByIdAndWorkspaceId(
         participantId,
         workspaceId,
       );
     if (!participant) throw new NotFoundException('Participant not found');
-    return participant;
+    const [user] = await this.userClientService.getUsersByIds([participant.userId]);
+    return {
+      ...participant,
+      user: user ?? {
+        id: participant.userId,
+        username: '',
+        email: '',
+        fullname: '',
+      },
+    };
   }
 
   async create(
     workspaceId: string,
     dto: CreateParticipantDto,
-  ): Promise<Participant> {
+  ): Promise<ParticipantWithUser> {
     await this.ensureWorkspaceExists(workspaceId);
-    const valid = await this.userClientService.validateUserIds([dto.userId]);
-    if (!valid) throw new NotFoundException('User not found');
+    let userId: string;
+    if (dto.userId) {
+      const valid = await this.userClientService.validateUserIds([dto.userId]);
+      if (!valid) throw new NotFoundException('User not found');
+      userId = dto.userId;
+    } else if (dto.email) {
+      const user = await this.userClientService.getUserByEmail(dto.email);
+      if (!user) throw new NotFoundException('User not found');
+      userId = user.id;
+    } else {
+      throw new NotFoundException('Either userId or email is required');
+    }
 
     const existing =
       await this.participantRepository.findUniqueByUserIdAndWorkspaceId(
-        dto.userId,
+        userId,
         workspaceId,
       );
     if (existing) {
@@ -89,22 +124,42 @@ export class ParticipantsService {
       );
     }
 
-    return this.participantRepository.create({
+    const participant = await this.participantRepository.create({
       workspaceId,
-      userId: dto.userId,
+      userId,
       role: dto.role,
     });
+    const [user] = await this.userClientService.getUsersByIds([userId]);
+    return {
+      ...participant,
+      user: user ?? {
+        id: userId,
+        username: '',
+        email: '',
+        fullname: '',
+      },
+    };
   }
 
   async update(
     workspaceId: string,
     participantId: string,
     dto: Partial<UpdateParticipantDto>,
-  ): Promise<Participant> {
+  ): Promise<ParticipantWithUser> {
     await this.findOne(workspaceId, participantId);
-    return this.participantRepository.update(participantId, {
+    const participant = await this.participantRepository.update(participantId, {
       ...(dto.role !== undefined && { role: dto.role }),
     });
+    const [user] = await this.userClientService.getUsersByIds([participant.userId]);
+    return {
+      ...participant,
+      user: user ?? {
+        id: participant.userId,
+        username: '',
+        email: '',
+        fullname: '',
+      },
+    };
   }
 
   async remove(workspaceId: string, participantId: string): Promise<boolean> {

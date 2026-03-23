@@ -116,6 +116,8 @@ describe('Cross-Service E2E', () => {
     expect(res.data).toHaveProperty('id');
     expect(res.data.userId).toBe(userId2);
     expect(res.data.role).toBe('Member');
+    expect(res.data.user).toBeDefined();
+    expect(res.data.user).toMatchObject({ id: userId2, email: user2.email, fullname: user2.fullname });
   });
 
   it('4. POST /workspaces/:id/projects - create project', async () => {

@@ -25,6 +25,10 @@ export class UsersService {
     return this.userRepository.findUniqueByEmail(email);
   }
 
+  findManyByIds(ids: string[]): Promise<Pick<User, 'id' | 'username' | 'email' | 'fullname'>[]> {
+    return this.userRepository.findManyByIds(ids);
+  }
+
   async getProfile(userId: string): Promise<Omit<User, 'password'> | null> {
     const user = await this.userRepository.findUniqueById(userId);
     if (!user) return null;

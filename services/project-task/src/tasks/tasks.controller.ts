@@ -16,9 +16,8 @@ import {
   type PaginationMeta,
   PaginationDto,
 } from '@project-management/shared';
-import type { Task } from 'generated/prisma/client';
 import { DeadlineInSprintPipe } from './pipes/deadline-in-sprint.pipe';
-import { TasksService } from './tasks.service';
+import { type TaskWithAssignees, TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 
@@ -41,7 +40,7 @@ export class TasksController {
     @Param('workspaceId') workspaceId: string,
     @Param('projectId') projectId: string,
     @Query() pagination: PaginationDto,
-  ): Promise<{ data: Task[]; meta: PaginationMeta }> {
+  ): Promise<{ data: TaskWithAssignees[]; meta: PaginationMeta }> {
     return this.tasksService.findAllByProjectId(
       workspaceId,
       projectId,
@@ -55,7 +54,7 @@ export class TasksController {
     @Param('workspaceId') workspaceId: string,
     @Param('projectId') projectId: string,
     @Param('taskId') taskId: string,
-  ): Promise<Task> {
+  ): Promise<TaskWithAssignees> {
     return this.tasksService.findOne(workspaceId, projectId, taskId);
   }
 
@@ -66,7 +65,7 @@ export class TasksController {
     @Param('projectId') projectId: string,
     @Body(DeadlineInSprintPipe) dto: CreateTaskDto,
     @Request() req: { user?: { sub?: string }; headers?: { authorization?: string } },
-  ): Promise<Task> {
+  ): Promise<TaskWithAssignees> {
     return this.tasksService.create(
       workspaceId,
       projectId,
@@ -85,7 +84,7 @@ export class TasksController {
     @Param('taskId') taskId: string,
     @Body(DeadlineInSprintPipe) dto: Partial<UpdateTaskDto>,
     @Request() req: { user?: { sub?: string }; headers?: { authorization?: string } },
-  ): Promise<Task> {
+  ): Promise<TaskWithAssignees> {
     return this.tasksService.update(
       workspaceId,
       projectId,

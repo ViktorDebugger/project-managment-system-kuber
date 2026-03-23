@@ -14,7 +14,20 @@ import { TaskRepository } from './repositories/task.repository';
 import { UserClientService } from '../clients/user-client.service';
 import { WorkspaceClientService } from '../clients/workspace-client.service';
 
+export type AssigneeInfo = { id: string; username: string; email: string; fullname: string };
+export type TaskWithAssignees = Omit<Task, 'assigneeIds'> & {
+  assigneeIds: string[];
+  assignees: AssigneeInfo[];
+};
+
 const TASK_SORT_FIELDS = ['title', 'createdAt', 'updatedAt'] as const;
+
+function parseAssigneeIds(assigneeIds: unknown): string[] {
+  if (Array.isArray(assigneeIds)) {
+    return assigneeIds.filter((id): id is string => typeof id === 'string');
+  }
+  return [];
+}
 
 @Injectable()
 export class TasksService {
@@ -28,7 +41,7 @@ export class TasksService {
     workspaceId: string,
     projectId: string,
     pagination: PaginationDto,
-  ): Promise<{ data: Task[]; meta: PaginationMeta }> {
+  ): Promise<{ data: TaskWithAssignees[]; meta: PaginationMeta }> {
     await this.ensureProjectBelongsToWorkspace(workspaceId, projectId);
     const page = Number(pagination.page) || 1;
     const limit = Number(pagination.limit) || 10;
@@ -41,7 +54,7 @@ export class TasksService {
     const skip = (page - 1) * limit;
     const take = limit;
     const orderBy = { [sortBy]: order };
-    const [data, total] = await Promise.all([
+    const [tasks, total] = await Promise.all([
       this.taskRepository.findManyByProjectIdPaginated(projectId, {
         skip,
         take,
@@ -49,6 +62,23 @@ export class TasksService {
       }),
       this.taskRepository.countByProjectId(projectId),
     ]);
+    const allAssigneeIds = [
+      ...new Set(
+        tasks.flatMap((t) => parseAssigneeIds(t.assigneeIds)),
+      ),
+    ];
+    const users = await this.userClientService.getUsersByIds(allAssigneeIds);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    const data: TaskWithAssignees[] = tasks.map((task) => {
+      const ids = parseAssigneeIds(task.assigneeIds);
+      return {
+        ...task,
+        assigneeIds: ids,
+        assignees: ids.map((id) =>
+          userMap.get(id) ?? { id, username: '', email: '', fullname: '' },
+        ),
+      };
+    });
     return {
       data,
       meta: {
@@ -64,7 +94,7 @@ export class TasksService {
     workspaceId: string,
     projectId: string,
     taskId: string,
-  ): Promise<Task> {
+  ): Promise<TaskWithAssignees> {
     const task = await this.taskRepository.findFirstByIdAndProjectId(
       taskId,
       projectId,
@@ -73,7 +103,16 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
     await this.ensureProjectBelongsToWorkspace(workspaceId, projectId);
-    return task;
+    const ids = parseAssigneeIds(task.assigneeIds);
+    const users = await this.userClientService.getUsersByIds(ids);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    return {
+      ...task,
+      assigneeIds: ids,
+      assignees: ids.map((id) =>
+        userMap.get(id) ?? { id, username: '', email: '', fullname: '' },
+      ),
+    };
   }
 
   async create(
@@ -82,7 +121,7 @@ export class TasksService {
     dto: CreateTaskDto,
     userId?: string,
     authHeader?: string,
-  ): Promise<Task> {
+  ): Promise<TaskWithAssignees> {
     await this.ensureProjectBelongsToWorkspace(workspaceId, projectId);
     if (dto.assignees?.length) {
       await this.validateAssignees(dto.assignees);
@@ -109,11 +148,21 @@ export class TasksService {
       ...(dto.sprintId && { sprintId: dto.sprintId }),
     };
 
-    return this.taskRepository.createWithTransaction(taskData, {
+    const task = await this.taskRepository.createWithTransaction(taskData, {
       action: 'created',
       message: `Task "${dto.title}" created`,
       userId,
     });
+    const ids = parseAssigneeIds(task.assigneeIds);
+    const users = await this.userClientService.getUsersByIds(ids);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    return {
+      ...task,
+      assigneeIds: ids,
+      assignees: ids.map((id) =>
+        userMap.get(id) ?? { id, username: '', email: '', fullname: '' },
+      ),
+    };
   }
 
   async update(
@@ -123,7 +172,7 @@ export class TasksService {
     dto: Partial<UpdateTaskDto>,
     userId?: string,
     authHeader?: string,
-  ): Promise<Task> {
+  ): Promise<TaskWithAssignees> {
     await this.findOne(workspaceId, projectId, taskId);
     if (dto.assignees !== undefined && dto.assignees.length > 0) {
       await this.validateAssignees(dto.assignees);
@@ -156,11 +205,25 @@ export class TasksService {
       ...(tagIds !== undefined && { tagIds }),
     };
 
-    return this.taskRepository.updateWithTransaction(taskId, updateData, {
-      action: 'updated',
-      message: this.describeChanges(dto),
-      userId,
-    });
+    const task = await this.taskRepository.updateWithTransaction(
+      taskId,
+      updateData,
+      {
+        action: 'updated',
+        message: this.describeChanges(dto),
+        userId,
+      },
+    );
+    const ids = parseAssigneeIds(task.assigneeIds);
+    const users = await this.userClientService.getUsersByIds(ids);
+    const userMap = new Map(users.map((u) => [u.id, u]));
+    return {
+      ...task,
+      assigneeIds: ids,
+      assignees: ids.map((id) =>
+        userMap.get(id) ?? { id, username: '', email: '', fullname: '' },
+      ),
+    };
   }
 
   async remove(
